@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Well Tank Monitor</title>
+    <meta name="description" content="Monitor your well tank water level in real-time">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Well Tank Monitor">
+    
+    <!-- Styles -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="styles.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-tint"></i> Well Tank Monitor</h1>
+                <div class="header-actions">
+                    <button id="refreshBtn" class="btn btn-secondary" title="Refresh">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button id="settingsBtn" class="btn btn-secondary" title="Settings">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Current Status Card -->
+            <div class="card status-card">
+                <div class="card-header">
+                    <h2>Current Status</h2>
+                    <span id="lastUpdate" class="timestamp">Loading...</span>
+                </div>
+                <div class="status-content">
+                    <div class="tank-visualization">
+                        <div class="tank-container">
+                            <div id="waterLevel" class="water-level"></div>
+                            <div class="tank-label">
+                                <span id="fillPercentage">--</span>%
+                            </div>
+                        </div>
+                    </div>
+                    <div class="status-details">
+                        <div class="status-item">
+                            <i class="fas fa-tint"></i>
+                            <div>
+                                <span class="label">Water Level</span>
+                                <span id="waterLevelCm" class="value">-- cm</span>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <i class="fas fa-gauge-high"></i>
+                            <div>
+                                <span class="label">Gallons</span>
+                                <span id="gallons" class="value">-- gal</span>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <i class="fas fa-ruler-vertical"></i>
+                            <div>
+                                <span class="label">Distance</span>
+                                <span id="distanceCm" class="value">-- cm</span>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <i class="fas fa-wifi"></i>
+                            <div>
+                                <span class="label">Signal</span>
+                                <span id="wifiRssi" class="value">-- dBm</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card actions-card">
+                <div class="card-header">
+                    <h2>Quick Actions</h2>
+                </div>
+                <div class="actions-grid">
+                    <button id="forceReadingBtn" class="action-btn">
+                        <i class="fas fa-sync"></i>
+                        <span>New Reading</span>
+                    </button>
+                    <button id="historyBtn" class="action-btn">
+                        <i class="fas fa-chart-line"></i>
+                        <span>History</span>
+                    </button>
+                    <button id="alertsBtn" class="action-btn">
+                        <i class="fas fa-bell"></i>
+                        <span>Alerts</span>
+                    </button>
+                    <button id="configBtn" class="action-btn">
+                        <i class="fas fa-cog"></i>
+                        <span>Config</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recent Alerts -->
+            <div class="card alerts-card">
+                <div class="card-header">
+                    <h2>Recent Alerts</h2>
+                    <button id="viewAllAlertsBtn" class="btn btn-text">View All</button>
+                </div>
+                <div id="recentAlerts" class="alerts-list">
+                    <div class="loading">Loading alerts...</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Modals -->
+        <div id="historyModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Reading History</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="historyChart" class="chart-container">
+                        <canvas id="historyCanvas"></canvas>
+                    </div>
+                    <div id="historyList" class="history-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="alertsModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Alert History</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="alertsList" class="alerts-list-full"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="settingsModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-section">
+                        <h3>Configuration</h3>
+                        <div id="configInfo" class="config-info">
+                            <div class="config-item">
+                                <span class="label">ESP32 IP:</span>
+                                <span id="esp32Ip">--</span>
+                            </div>
+                            <div class="config-item">
+                                <span class="label">Alert Threshold:</span>
+                                <span id="alertThreshold">--%</span>
+                            </div>
+                            <div class="config-item">
+                                <span class="label">Alert Cooldown:</span>
+                                <span id="alertCooldown">-- min</span>
+                            </div>
+                            <div class="config-item">
+                                <span class="label">Firebase Status:</span>
+                                <span id="firebaseStatus">--</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h3>Notifications</h3>
+                        <div class="notification-settings">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="enableNotifications">
+                                <span class="checkmark"></span>
+                                Enable Push Notifications
+                            </label>
+                            <button id="subscribeBtn" class="btn btn-primary" disabled>
+                                Subscribe to Alerts
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loading-spinner"></div>
+            <p>Loading...</p>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toastContainer" class="toast-container"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+    <script src="sw.js"></script>
+</body>
+</html> 

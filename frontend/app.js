@@ -1,0 +1,489 @@
+// Well Tank Monitor PWA
+class WellTankMonitor {
+    constructor() {
+        this.apiBase = '/api';
+        this.currentData = null;
+        this.historyChart = null;
+        this.updateInterval = null;
+        this.isOnline = navigator.onLine;
+        
+        this.init();
+    }
+
+    async init() {
+        this.setupEventListeners();
+        this.setupServiceWorker();
+        this.setupOnlineStatus();
+        await this.loadInitialData();
+        this.startAutoRefresh();
+    }
+
+    setupEventListeners() {
+        // Header buttons
+        document.getElementById('refreshBtn').addEventListener('click', () => this.refreshData());
+        document.getElementById('settingsBtn').addEventListener('click', () => this.showSettings());
+
+        // Action buttons
+        document.getElementById('forceReadingBtn').addEventListener('click', () => this.forceReading());
+        document.getElementById('historyBtn').addEventListener('click', () => this.showHistory());
+        document.getElementById('alertsBtn').addEventListener('click', () => this.showAlerts());
+        document.getElementById('configBtn').addEventListener('click', () => this.showSettings());
+        document.getElementById('viewAllAlertsBtn').addEventListener('click', () => this.showAlerts());
+
+        // Modal close buttons
+        document.querySelectorAll('.modal-close').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.target.closest('.modal').classList.remove('show');
+            });
+        });
+
+        // Modal backdrop clicks
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('show');
+                }
+            });
+        });
+
+        // Settings
+        document.getElementById('enableNotifications').addEventListener('change', (e) => {
+            this.handleNotificationToggle(e.target.checked);
+        });
+
+        document.getElementById('subscribeBtn').addEventListener('click', () => {
+            this.subscribeToNotifications();
+        });
+    }
+
+    setupServiceWorker() {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('SW registered: ', registration);
+                })
+                .catch(registrationError => {
+                    console.log('SW registration failed: ', registrationError);
+                });
+        }
+    }
+
+    setupOnlineStatus() {
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            this.showToast('Connection restored', 'success');
+            this.refreshData();
+        });
+
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+            this.showToast('Connection lost', 'warning');
+        });
+    }
+
+    async loadInitialData() {
+        try {
+            this.showLoading(true);
+            await this.refreshData();
+            await this.loadRecentAlerts();
+            await this.loadConfig();
+        } catch (error) {
+            console.error('Error loading initial data:', error);
+            this.showToast('Failed to load data', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async refreshData() {
+        try {
+            const response = await fetch(`${this.apiBase}/current`);
+            if (!response.ok) throw new Error('Failed to fetch data');
+            
+            const data = await response.json();
+            this.updateUI(data);
+            this.currentData = data;
+        } catch (error) {
+            console.error('Error refreshing data:', error);
+            this.showToast('Failed to refresh data', 'error');
+        }
+    }
+
+    updateUI(data) {
+        // Update tank visualization
+        const waterLevel = document.getElementById('waterLevel');
+        const fillPercentage = document.getElementById('fillPercentage');
+        const percentage = data.fill_percentage || 0;
+        
+        waterLevel.style.height = `${percentage}%`;
+        fillPercentage.textContent = percentage.toFixed(1);
+
+        // Update status details
+        document.getElementById('waterLevelCm').textContent = `${(data.water_level_cm || 0).toFixed(1)} cm`;
+        document.getElementById('gallons').textContent = `${(data.gallons || 0).toFixed(0)} gal`;
+        document.getElementById('distanceCm').textContent = `${(data.distance_cm || 0).toFixed(1)} cm`;
+        document.getElementById('wifiRssi').textContent = `${data.wifi_rssi || 0} dBm`;
+
+        // Update timestamp
+        const lastUpdate = document.getElementById('lastUpdate');
+        lastUpdate.textContent = new Date().toLocaleTimeString();
+
+        // Add fade-in animation
+        document.querySelector('.status-card').classList.add('fade-in');
+        setTimeout(() => {
+            document.querySelector('.status-card').classList.remove('fade-in');
+        }, 300);
+    }
+
+    async forceReading() {
+        try {
+            this.showLoading(true);
+            const response = await fetch(`${this.apiBase}/force-reading`);
+            if (!response.ok) throw new Error('Failed to force reading');
+            
+            const result = await response.json();
+            if (result.success) {
+                this.updateUI(result.data);
+                this.showToast('New reading taken successfully', 'success');
+            } else {
+                throw new Error(result.error || 'Failed to take reading');
+            }
+        } catch (error) {
+            console.error('Error forcing reading:', error);
+            this.showToast('Failed to take new reading', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async showHistory() {
+        try {
+            this.showLoading(true);
+            const response = await fetch(`${this.apiBase}/history`);
+            if (!response.ok) throw new Error('Failed to fetch history');
+            
+            const history = await response.json();
+            this.displayHistory(history);
+            document.getElementById('historyModal').classList.add('show');
+        } catch (error) {
+            console.error('Error loading history:', error);
+            this.showToast('Failed to load history', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    displayHistory(history) {
+        const historyList = document.getElementById('historyList');
+        const chartContainer = document.getElementById('historyChart');
+        
+        // Clear previous content
+        historyList.innerHTML = '';
+        
+        if (history.length === 0) {
+            historyList.innerHTML = '<div class="loading">No history data available</div>';
+            return;
+        }
+
+        // Create chart
+        this.createHistoryChart(history, chartContainer);
+
+        // Create history list
+        history.forEach(reading => {
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            
+            const timestamp = reading.timestamp ? new Date(reading.timestamp.toDate()).toLocaleString() : 'Unknown';
+            const percentage = reading.fill_percentage ? reading.fill_percentage.toFixed(1) : '0';
+            
+            item.innerHTML = `
+                <div class="history-info">
+                    <div class="history-time">${timestamp}</div>
+                    <div class="history-value">${reading.gallons ? reading.gallons.toFixed(0) : '0'} gallons</div>
+                </div>
+                <div class="history-value">${percentage}%</div>
+            `;
+            
+            historyList.appendChild(item);
+        });
+    }
+
+    createHistoryChart(history, container) {
+        const ctx = document.getElementById('historyCanvas');
+        
+        // Destroy existing chart
+        if (this.historyChart) {
+            this.historyChart.destroy();
+        }
+
+        // Prepare data
+        const labels = history.map(reading => {
+            const date = reading.timestamp ? new Date(reading.timestamp.toDate()) : new Date();
+            return date.toLocaleTimeString();
+        }).reverse();
+
+        const data = history.map(reading => reading.fill_percentage || 0).reverse();
+
+        // Create new chart
+        this.historyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Fill Percentage',
+                    data: data,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 8
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    async loadRecentAlerts() {
+        try {
+            const response = await fetch(`${this.apiBase}/alerts`);
+            if (!response.ok) throw new Error('Failed to fetch alerts');
+            
+            const alerts = await response.json();
+            this.displayRecentAlerts(alerts.slice(0, 5)); // Show only 5 most recent
+        } catch (error) {
+            console.error('Error loading alerts:', error);
+        }
+    }
+
+    displayRecentAlerts(alerts) {
+        const container = document.getElementById('recentAlerts');
+        
+        if (alerts.length === 0) {
+            container.innerHTML = '<div class="loading">No recent alerts</div>';
+            return;
+        }
+
+        container.innerHTML = alerts.map(alert => {
+            const timestamp = alert.timestamp ? new Date(alert.timestamp.toDate()).toLocaleString() : 'Unknown';
+            const isIncrease = alert.current_level > alert.previous_level;
+            const icon = isIncrease ? '📈' : '📉';
+            const iconClass = isIncrease ? 'increase' : 'decrease';
+            const changeClass = isIncrease ? 'increase' : 'decrease';
+            
+            return `
+                <div class="alert-item">
+                    <div class="alert-icon ${iconClass}">${icon}</div>
+                    <div class="alert-content">
+                        <div class="alert-title">Water level ${isIncrease ? 'increased' : 'decreased'}</div>
+                        <div class="alert-time">${timestamp}</div>
+                    </div>
+                    <div class="alert-change ${changeClass}">
+                        ${alert.percent_change ? alert.percent_change.toFixed(1) : '0'}%
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async showAlerts() {
+        try {
+            this.showLoading(true);
+            const response = await fetch(`${this.apiBase}/alerts`);
+            if (!response.ok) throw new Error('Failed to fetch alerts');
+            
+            const alerts = await response.json();
+            this.displayAllAlerts(alerts);
+            document.getElementById('alertsModal').classList.add('show');
+        } catch (error) {
+            console.error('Error loading alerts:', error);
+            this.showToast('Failed to load alerts', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    displayAllAlerts(alerts) {
+        const container = document.getElementById('alertsList');
+        
+        if (alerts.length === 0) {
+            container.innerHTML = '<div class="loading">No alerts found</div>';
+            return;
+        }
+
+        container.innerHTML = alerts.map(alert => {
+            const timestamp = alert.timestamp ? new Date(alert.timestamp.toDate()).toLocaleString() : 'Unknown';
+            const isIncrease = alert.current_level > alert.previous_level;
+            const icon = isIncrease ? '📈' : '📉';
+            const iconClass = isIncrease ? 'increase' : 'decrease';
+            const changeClass = isIncrease ? 'increase' : 'decrease';
+            
+            return `
+                <div class="alert-item">
+                    <div class="alert-icon ${iconClass}">${icon}</div>
+                    <div class="alert-content">
+                        <div class="alert-title">Water level ${isIncrease ? 'increased' : 'decreased'} by ${alert.percent_change ? alert.percent_change.toFixed(1) : '0'}%</div>
+                        <div class="alert-time">${timestamp}</div>
+                        <div class="alert-details">
+                            From ${alert.previous_level ? alert.previous_level.toFixed(1) : '0'}% to ${alert.current_level ? alert.current_level.toFixed(1) : '0'}%
+                        </div>
+                    </div>
+                    <div class="alert-change ${changeClass}">
+                        ${alert.percent_change ? alert.percent_change.toFixed(1) : '0'}%
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async loadConfig() {
+        try {
+            const response = await fetch(`${this.apiBase}/config`);
+            if (!response.ok) throw new Error('Failed to fetch config');
+            
+            const config = await response.json();
+            this.updateConfigUI(config);
+        } catch (error) {
+            console.error('Error loading config:', error);
+        }
+    }
+
+    updateConfigUI(config) {
+        document.getElementById('esp32Ip').textContent = config.esp32_ip || '--';
+        document.getElementById('alertThreshold').textContent = `${config.alert_threshold || 0}%`;
+        document.getElementById('alertCooldown').textContent = `${config.alert_cooldown || 0} min`;
+        document.getElementById('firebaseStatus').textContent = config.firebase_connected ? 'Connected' : 'Disconnected';
+    }
+
+    showSettings() {
+        document.getElementById('settingsModal').classList.add('show');
+    }
+
+    async handleNotificationToggle(enabled) {
+        const subscribeBtn = document.getElementById('subscribeBtn');
+        
+        if (enabled) {
+            if ('Notification' in window) {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    subscribeBtn.disabled = false;
+                    this.showToast('Notifications enabled', 'success');
+                } else {
+                    document.getElementById('enableNotifications').checked = false;
+                    this.showToast('Notification permission denied', 'error');
+                }
+            } else {
+                document.getElementById('enableNotifications').checked = false;
+                this.showToast('Notifications not supported', 'error');
+            }
+        } else {
+            subscribeBtn.disabled = true;
+        }
+    }
+
+    async subscribeToNotifications() {
+        try {
+            // This would integrate with Firebase Cloud Messaging
+            // For now, we'll just show a success message
+            this.showToast('Subscribed to alerts', 'success');
+        } catch (error) {
+            console.error('Error subscribing to notifications:', error);
+            this.showToast('Failed to subscribe', 'error');
+        }
+    }
+
+    startAutoRefresh() {
+        // Refresh data every 30 seconds
+        this.updateInterval = setInterval(() => {
+            if (this.isOnline) {
+                this.refreshData();
+            }
+        }, 30000);
+    }
+
+    showLoading(show) {
+        const overlay = document.getElementById('loadingOverlay');
+        if (show) {
+            overlay.classList.add('show');
+        } else {
+            overlay.classList.remove('show');
+        }
+    }
+
+    showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const id = Date.now();
+        toast.innerHTML = `
+            <div class="toast-header">
+                <div class="toast-title">${this.getToastTitle(type)}</div>
+                <button class="toast-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
+            </div>
+            <div class="toast-message">${message}</div>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 5000);
+    }
+
+    getToastTitle(type) {
+        switch (type) {
+            case 'success': return 'Success';
+            case 'error': return 'Error';
+            case 'warning': return 'Warning';
+            default: return 'Info';
+        }
+    }
+}
+
+// Initialize the app when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    new WellTankMonitor();
+});
+
+// Handle beforeinstallprompt for PWA installation
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    
+    // Show install button or prompt
+    // You can add an install button to your UI here
+});
+
+// Handle app installed
+window.addEventListener('appinstalled', () => {
+    console.log('PWA was installed');
+    deferredPrompt = null;
+}); 
