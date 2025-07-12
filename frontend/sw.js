@@ -22,6 +22,20 @@ self.addEventListener('install', (event) => {
 
 // Fetch event - serve from cache when offline
 self.addEventListener('fetch', (event) => {
+    // Don't cache API requests - let them go directly to the network
+    if (event.request.url.includes('/api/')) {
+        event.respondWith(
+            fetch(event.request).catch(() => {
+                // If network fails, return a simple error response
+                return new Response(JSON.stringify({ error: 'Network error' }), {
+                    status: 503,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            })
+        );
+        return;
+    }
+    
     event.respondWith(
         caches.match(event.request)
             .then((response) => {
@@ -31,27 +45,22 @@ self.addEventListener('fetch', (event) => {
                 }
                 
                 return fetch(event.request).then((response) => {
-                    // Don't cache API requests
-                    if (event.request.url.includes('/api/')) {
-                        return response;
-                    }
-                    
                     // Check if we received a valid response
                     if (!response || response.status !== 200 || response.type !== 'basic') {
                         return response;
-                }
-                
-                // Clone the response
-                const responseToCache = response.clone();
-                
-                caches.open(CACHE_NAME)
-                    .then((cache) => {
-                        cache.put(event.request, responseToCache);
-                    });
-                
-                return response;
-            });
-        })
+                    }
+                    
+                    // Clone the response
+                    const responseToCache = response.clone();
+                    
+                    caches.open(CACHE_NAME)
+                        .then((cache) => {
+                            cache.put(event.request, responseToCache);
+                        });
+                    
+                    return response;
+                });
+            })
     );
 });
 

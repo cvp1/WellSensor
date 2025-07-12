@@ -86,6 +86,20 @@ def check_for_alerts(current_data, previous_data):
             
             # Store alert in Firebase
             store_alert(current_data, previous_data, percent_change)
+    
+    # Check for low battery alert
+    battery_voltage = current_data.get('battery_voltage', 0)
+    if battery_voltage > 0 and battery_voltage < 11.0:  # Alert if battery below 11V
+        # Check cooldown period for battery alerts
+        if (last_alert_time is None or 
+            datetime.now() - last_alert_time > timedelta(minutes=ALERT_COOLDOWN)):
+            
+            # Send battery alert
+            send_battery_alert(current_data, battery_voltage)
+            last_alert_time = datetime.now()
+            
+            # Store battery alert in Firebase
+            store_battery_alert(current_data, battery_voltage)
 
 def send_alert(current_data, previous_data, percent_change):
     """Send push notification via Firebase"""
@@ -140,6 +154,44 @@ def store_alert(current_data, previous_data, percent_change):
     except Exception as e:
         print(f"Error storing alert: {e}")
 
+def send_battery_alert(current_data, battery_voltage):
+    """Send battery low push notification via Firebase"""
+    try:
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title='Low Battery Alert',
+                body=f'Well sensor battery is low: {battery_voltage:.1f}V. Please check power source.'
+            ),
+            data={
+                'battery_voltage': str(battery_voltage),
+                'gallons': str(current_data.get('gallons', 0)),
+                'timestamp': str(datetime.now().isoformat())
+            },
+            topic='tank_alerts'
+        )
+        
+        response = messaging.send(message)
+        print(f'Battery alert sent: {response}')
+    except Exception as e:
+        print(f'Error sending battery alert: {e}')
+
+def store_battery_alert(current_data, battery_voltage):
+    """Store battery alert in Firebase Firestore"""
+    try:
+        alert_data = {
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'type': 'low_battery',
+            'battery_voltage': battery_voltage,
+            'gallons': current_data.get('gallons', 0),
+            'fill_percentage': current_data.get('fill_percentage', 0),
+            'device_id': current_data.get('device_id', 'unknown')
+        }
+        
+        db.collection('alerts').add(alert_data)
+        print(f"Battery alert stored in Firestore: {battery_voltage:.1f}V")
+    except Exception as e:
+        print(f"Error storing battery alert: {e}")
+
 def store_reading(data):
     """Store sensor reading in Firebase Firestore"""
     if not firebase_initialized:
@@ -152,6 +204,7 @@ def store_reading(data):
             'water_level_cm': data.get('water_level_cm', 0),
             'gallons': data.get('gallons', 0),
             'fill_percentage': data.get('fill_percentage', 0),
+            'battery_voltage': data.get('battery_voltage', 0),
             'wifi_rssi': data.get('wifi_rssi', 0),
             'device_id': data.get('device_id', 'unknown')
         }
@@ -207,13 +260,13 @@ def get_current_reading():
     global last_reading
     
     if not last_reading:
-        # Fetch fresh data if none available
+        # Try to fetch fresh data if none available
         data = get_esp32_data()
         if data:
             last_reading = data
             store_reading(data)
         else:
-            return jsonify({'error': 'Unable to fetch sensor data'}), 500
+            return jsonify({'error': 'No sensor data available'}), 404
     
     return jsonify(last_reading)
 
@@ -221,7 +274,8 @@ def get_current_reading():
 def get_history():
     """Get historical readings from Firebase"""
     if not firebase_initialized:
-        return jsonify({'error': 'Firebase not connected'}), 500
+        # Return empty list if Firebase not connected
+        return jsonify([])
     
     try:
         # Get last 24 hours of readings
@@ -242,13 +296,16 @@ def get_history():
         return jsonify(history)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Firebase error: {e}")
+        # Return empty list on error
+        return jsonify([])
 
 @app.route('/alerts')
 def get_alerts():
     """Get recent alerts"""
     if not firebase_initialized:
-        return jsonify({'error': 'Firebase not connected'}), 500
+        # Return empty list if Firebase not connected
+        return jsonify([])
     
     try:
         # Get last 7 days of alerts
@@ -269,7 +326,9 @@ def get_alerts():
         return jsonify(alert_list)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Firebase error: {e}")
+        # Return empty list on error
+        return jsonify([])
 
 @app.route('/force-reading')
 def force_reading():
@@ -301,6 +360,43 @@ def force_reading():
             
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'Failed to trigger reading: {str(e)}'}), 500
+
+@app.route('/tank-data', methods=['POST'])
+def receive_tank_data():
+    """Receive tank data from ESP32"""
+    global last_reading
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data received'}), 400
+        
+        # Validate required fields
+        required_fields = ['device_id', 'distance_cm', 'water_level_cm', 'gallons', 'fill_percentage']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Check for alerts
+        if last_reading:
+            check_for_alerts(data, last_reading)
+        
+        # Store reading
+        store_reading(data)
+        
+        # Update last reading
+        last_reading = data
+        
+        print(f"Received tank data: {data.get('fill_percentage', 0):.1f}%")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Data received successfully'
+        })
+        
+    except Exception as e:
+        print(f"Error processing tank data: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/config')
 def get_config():

@@ -98,14 +98,23 @@ class WellTankMonitor {
     async refreshData() {
         try {
             const response = await fetch(`${this.apiBase}/current`);
-            if (!response.ok) throw new Error('Failed to fetch data');
+            if (!response.ok) {
+                if (response.status === 404) {
+                    // No data available yet - this is normal
+                    console.log('No current data available yet');
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}: Failed to fetch data`);
+            }
             
             const data = await response.json();
             this.updateUI(data);
             this.currentData = data;
         } catch (error) {
             console.error('Error refreshing data:', error);
-            this.showToast('Failed to refresh data', 'error');
+            if (!error.message.includes('404')) {
+                this.showToast('Failed to refresh data', 'error');
+            }
         }
     }
 
@@ -193,7 +202,17 @@ class WellTankMonitor {
             const item = document.createElement('div');
             item.className = 'history-item';
             
-            const timestamp = reading.timestamp ? new Date(reading.timestamp.toDate()).toLocaleString() : 'Unknown';
+            let timestamp = 'Unknown';
+            if (reading.timestamp) {
+                if (reading.timestamp.toDate) {
+                    timestamp = new Date(reading.timestamp.toDate()).toLocaleString();
+                } else if (reading.timestamp.seconds) {
+                    timestamp = new Date(reading.timestamp.seconds * 1000).toLocaleString();
+                } else {
+                    timestamp = new Date(reading.timestamp).toLocaleString();
+                }
+            }
+            
             const percentage = reading.fill_percentage ? reading.fill_percentage.toFixed(1) : '0';
             
             item.innerHTML = `
@@ -211,6 +230,13 @@ class WellTankMonitor {
     createHistoryChart(history, container) {
         const ctx = document.getElementById('historyCanvas');
         
+        // Check if Chart.js is available
+        if (typeof Chart === 'undefined') {
+            console.warn('Chart.js not loaded, skipping chart creation');
+            container.innerHTML = '<div class="loading">Chart.js not available. Please refresh the page.</div>';
+            return;
+        }
+        
         // Destroy existing chart
         if (this.historyChart) {
             this.historyChart.destroy();
@@ -218,64 +244,82 @@ class WellTankMonitor {
 
         // Prepare data
         const labels = history.map(reading => {
-            const date = reading.timestamp ? new Date(reading.timestamp.toDate()) : new Date();
+            let date = new Date();
+            if (reading.timestamp) {
+                if (reading.timestamp.toDate) {
+                    date = new Date(reading.timestamp.toDate());
+                } else if (reading.timestamp.seconds) {
+                    date = new Date(reading.timestamp.seconds * 1000);
+                } else {
+                    date = new Date(reading.timestamp);
+                }
+            }
             return date.toLocaleTimeString();
         }).reverse();
 
         const data = history.map(reading => reading.fill_percentage || 0).reverse();
 
-        // Create new chart
-        this.historyChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Fill Percentage',
-                    data: data,
-                    borderColor: '#2563eb',
-                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+        try {
+            // Create new chart
+            this.historyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Fill Percentage',
+                        data: data,
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
-                            }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
                         }
                     },
-                    x: {
-                        ticks: {
-                            maxTicksLimit: 8
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxTicksLimit: 8
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        } catch (error) {
+            console.error('Error creating chart:', error);
+            container.innerHTML = '<div class="loading">Error creating chart. Please try again.</div>';
+        }
     }
 
     async loadRecentAlerts() {
         try {
-            const response = await fetch(`${this.apiBase}/alerts`);
-            if (!response.ok) throw new Error('Failed to fetch alerts');
+            const response = await fetch(`${this.apiBase}/alerts?t=${Date.now()}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
             
             const alerts = await response.json();
             this.displayRecentAlerts(alerts.slice(0, 5)); // Show only 5 most recent
         } catch (error) {
             console.error('Error loading alerts:', error);
+            // Don't show error toast for recent alerts, just log it
         }
     }
 
@@ -288,7 +332,17 @@ class WellTankMonitor {
         }
 
         container.innerHTML = alerts.map(alert => {
-            const timestamp = alert.timestamp ? new Date(alert.timestamp.toDate()).toLocaleString() : 'Unknown';
+            let timestamp = 'Unknown';
+            if (alert.timestamp) {
+                if (alert.timestamp.toDate) {
+                    timestamp = new Date(alert.timestamp.toDate()).toLocaleString();
+                } else if (alert.timestamp.seconds) {
+                    timestamp = new Date(alert.timestamp.seconds * 1000).toLocaleString();
+                } else {
+                    timestamp = new Date(alert.timestamp).toLocaleString();
+                }
+            }
+            
             const isIncrease = alert.current_level > alert.previous_level;
             const icon = isIncrease ? '📈' : '📉';
             const iconClass = isIncrease ? 'increase' : 'decrease';
@@ -312,15 +366,18 @@ class WellTankMonitor {
     async showAlerts() {
         try {
             this.showLoading(true);
-            const response = await fetch(`${this.apiBase}/alerts`);
-            if (!response.ok) throw new Error('Failed to fetch alerts');
+            const response = await fetch(`${this.apiBase}/alerts?t=${Date.now()}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
             
             const alerts = await response.json();
             this.displayAllAlerts(alerts);
             document.getElementById('alertsModal').classList.add('show');
         } catch (error) {
             console.error('Error loading alerts:', error);
-            this.showToast('Failed to load alerts', 'error');
+            this.showToast(`Failed to load alerts: ${error.message}`, 'error');
         } finally {
             this.showLoading(false);
         }
@@ -335,7 +392,17 @@ class WellTankMonitor {
         }
 
         container.innerHTML = alerts.map(alert => {
-            const timestamp = alert.timestamp ? new Date(alert.timestamp.toDate()).toLocaleString() : 'Unknown';
+            let timestamp = 'Unknown';
+            if (alert.timestamp) {
+                if (alert.timestamp.toDate) {
+                    timestamp = new Date(alert.timestamp.toDate()).toLocaleString();
+                } else if (alert.timestamp.seconds) {
+                    timestamp = new Date(alert.timestamp.seconds * 1000).toLocaleString();
+                } else {
+                    timestamp = new Date(alert.timestamp).toLocaleString();
+                }
+            }
+            
             const isIncrease = alert.current_level > alert.previous_level;
             const icon = isIncrease ? '📈' : '📉';
             const iconClass = isIncrease ? 'increase' : 'decrease';
@@ -387,17 +454,25 @@ class WellTankMonitor {
         
         if (enabled) {
             if ('Notification' in window) {
-                const permission = await Notification.requestPermission();
-                if (permission === 'granted') {
-                    subscribeBtn.disabled = false;
-                    this.showToast('Notifications enabled', 'success');
-                } else {
+                try {
+                    const permission = await Notification.requestPermission();
+                    if (permission === 'granted') {
+                        subscribeBtn.disabled = false;
+                        this.showToast('Notifications enabled', 'success');
+                    } else if (permission === 'denied') {
+                        document.getElementById('enableNotifications').checked = false;
+                        this.showToast('Notification permission denied. Please enable notifications in your browser settings.', 'error');
+                    } else {
+                        document.getElementById('enableNotifications').checked = false;
+                        this.showToast('Notification permission cancelled', 'warning');
+                    }
+                } catch (error) {
                     document.getElementById('enableNotifications').checked = false;
-                    this.showToast('Notification permission denied', 'error');
+                    this.showToast('Push notifications require HTTPS. Use https://localhost:8443 for notifications.', 'error');
                 }
             } else {
                 document.getElementById('enableNotifications').checked = false;
-                this.showToast('Notifications not supported', 'error');
+                this.showToast('Notifications not supported in this browser', 'error');
             }
         } else {
             subscribeBtn.disabled = true;

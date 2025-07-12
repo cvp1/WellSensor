@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="384" height="384" viewBox="0 0 384 384" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="water" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="384" height="384" rx="48" fill="url(#bg)"/>
+  
+  <!-- Tank -->
+  <rect x="96" y="64" width="192" height="256" 
+        rx="19" fill="none" stroke="white" stroke-width="12"/>
+  
+  <!-- Water level -->
+  <rect x="108" y="320" width="168" 
+        height="96" fill="url(#water)" rx="9"/>
+  
+  <!-- Water drop icon -->
+  <circle cx="192" cy="128" r="48" fill="white" opacity="0.9"/>
+  <path d="M 192 80 Q 160 64 192 176 Q 224 64 192 80 Z" 
+        fill="white" opacity="0.7"/>
+</svg>

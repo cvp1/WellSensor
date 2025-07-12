@@ -338,6 +338,19 @@ body {
     color: #dc2626;
 }
 
+.alert-item.battery-alert {
+    border-left: 4px solid #f59e0b;
+}
+
+.alert-icon.battery {
+    color: #f59e0b;
+}
+
+.alert-change.battery {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
 /* Modals */
 .modal {
     display: none;
@@ -450,6 +463,12 @@ body {
 .history-value {
     font-weight: 600;
     color: #1f2937;
+}
+
+.history-battery {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
 }
 
 /* Settings */

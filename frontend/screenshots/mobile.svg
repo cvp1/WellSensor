@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="390" height="844" viewBox="0 0 390 844" xmlns="http://www.w3.org/2000/svg">
+  <rect width="390" height="844" fill="#f0f0f0"/>
+  <text x="195" y="422" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#666">
+    Mobile Screenshot Placeholder
+  </text>
+  <text x="195" y="460" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#999">
+    Replace with actual screenshot
+  </text>
+</svg>

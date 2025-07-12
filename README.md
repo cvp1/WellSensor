@@ -106,8 +106,8 @@ docker-compose down
 ```
 
 The application will be available at:
-- Frontend: http://localhost
-- Backend API: http://localhost:5000
+- Frontend: http://localhost:8091
+- Backend API: http://localhost:8090
 
 ## ESP32 Setup
 

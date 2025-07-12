@@ -7,10 +7,11 @@
     <meta name="description" content="Monitor your well tank water level in real-time">
     <meta name="theme-color" content="#2563eb">
     <link rel="manifest" href="/manifest.json">
-    <link rel="icon" type="image/png" href="/icons/icon-192x192.png">
-    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+    <link rel="icon" type="image/svg+xml" href="/icons/icon-192x192.svg">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.svg">
     
     <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Well Tank Monitor">
@@ -80,6 +81,13 @@
                             <div>
                                 <span class="label">Signal</span>
                                 <span id="wifiRssi" class="value">-- dBm</span>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <i class="fas fa-battery-three-quarters"></i>
+                            <div>
+                                <span class="label">Battery</span>
+                                <span id="batteryVoltage" class="value">-- V</span>
                             </div>
                         </div>
                     </div>
@@ -177,6 +185,10 @@
                                 <span class="label">Firebase Status:</span>
                                 <span id="firebaseStatus">--</span>
                             </div>
+                            <div class="config-item">
+                                <span class="label">Device ID:</span>
+                                <span id="deviceId">--</span>
+                            </div>
                         </div>
                     </div>
                     <div class="settings-section">
@@ -207,7 +219,7 @@
     </div>
 
     <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <script src="app.js"></script>
     <script src="sw.js"></script>
 </body>
