@@ -13,6 +13,110 @@ body {
     line-height: 1.6;
 }
 
+/* Enhanced Tank Severity Styles */
+.tank-container.emergency .tank-fill {
+    background: linear-gradient(to top, #dc2626, #ef4444);
+    animation: pulse-red 2s infinite;
+}
+
+.tank-container.critical .tank-fill {
+    background: linear-gradient(to top, #ea580c, #f97316);
+    animation: pulse-orange 3s infinite;
+}
+
+.tank-container.low .tank-fill {
+    background: linear-gradient(to top, #eab308, #facc15);
+}
+
+.tank-container.normal .tank-fill {
+    background: linear-gradient(to top, #2563eb, #3b82f6);
+}
+
+@keyframes pulse-red {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+@keyframes pulse-orange {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+/* Enhanced Alert Item Styles */
+.alert-item.emergency {
+    border-left: 4px solid #dc2626;
+    background: rgba(220, 38, 38, 0.05);
+}
+
+.alert-item.critical {
+    border-left: 4px solid #ea580c;
+    background: rgba(234, 88, 12, 0.05);
+}
+
+.alert-item.low {
+    border-left: 4px solid #eab308;
+    background: rgba(234, 179, 8, 0.05);
+}
+
+.alert-item.rapid_drop {
+    border-left: 4px solid #7c3aed;
+    background: rgba(124, 58, 237, 0.05);
+}
+
+.alert-icon.emergency {
+    color: #dc2626;
+    animation: pulse-red 2s infinite;
+}
+
+.alert-icon.critical {
+    color: #ea580c;
+    animation: pulse-orange 3s infinite;
+}
+
+.alert-icon.low {
+    color: #eab308;
+}
+
+.alert-icon.rapid_drop {
+    color: #7c3aed;
+}
+
+.alert-usage {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+/* Enhanced Configuration Sections */
+.enhanced-config-section,
+.usage-stats-section {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 0.5rem;
+    border: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.enhanced-config-section h4,
+.usage-stats-section h4 {
+    margin-bottom: 0.5rem;
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.config-item {
+    padding: 0.25rem 0;
+    font-size: 0.875rem;
+    color: #4b5563;
+}
+
+/* Battery Status Styles */
+.low-battery {
+    color: #dc2626 !important;
+    font-weight: bold;
+    animation: pulse-red 2s infinite;
+}
+
 .app-container {
     min-height: 100vh;
     display: flex;
@@ -265,6 +369,39 @@ body {
     font-size: 0.875rem;
     font-weight: 500;
     color: #374151;
+}
+
+/* Test Alerts Section */
+.test-alerts-section {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.test-alerts-section h3 {
+    margin: 0 0 0.5rem 0;
+    color: #1f2937;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.test-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.test-buttons .btn {
+    flex: 1;
+    min-width: 150px;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.test-buttons .btn i {
+    margin-right: 0.5rem;
 }
 
 /* Alerts */
@@ -704,6 +841,14 @@ body {
     
     .tank-label {
         font-size: 1.25rem;
+    }
+
+    .test-buttons {
+        flex-direction: column;
+    }
+
+    .test-buttons .btn {
+        min-width: auto;
     }
 }
 

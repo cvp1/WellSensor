@@ -30,6 +30,10 @@ class WellTankMonitor {
         document.getElementById('configBtn').addEventListener('click', () => this.showSettings());
         document.getElementById('viewAllAlertsBtn').addEventListener('click', () => this.showAlerts());
 
+        // Test notification buttons
+        document.getElementById('testPushBtn').addEventListener('click', () => this.testPushNotification());
+        document.getElementById('testEmailBtn').addEventListener('click', () => this.testEmailAlert());
+
         // Modal close buttons
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -127,11 +131,40 @@ class WellTankMonitor {
         waterLevel.style.height = `${percentage}%`;
         fillPercentage.textContent = percentage.toFixed(1);
 
+        // Add visual severity indicators
+        const tankContainer = document.querySelector('.tank-container');
+        tankContainer.classList.remove('emergency', 'critical', 'low', 'normal');
+        
+        if (percentage <= 5) {
+            tankContainer.classList.add('emergency');
+        } else if (percentage <= 10) {
+            tankContainer.classList.add('critical');
+        } else if (percentage <= 20) {
+            tankContainer.classList.add('low');
+        } else {
+            tankContainer.classList.add('normal');
+        }
+
         // Update status details
         document.getElementById('waterLevelCm').textContent = `${(data.water_level_cm || 0).toFixed(1)} cm`;
         document.getElementById('gallons').textContent = `${(data.gallons || 0).toFixed(0)} gal`;
         document.getElementById('distanceCm').textContent = `${(data.distance_cm || 0).toFixed(1)} cm`;
         document.getElementById('wifiRssi').textContent = `${data.wifi_rssi || 0} dBm`;
+        
+        // Update battery voltage
+        const batteryElement = document.getElementById('batteryVoltage');
+        if (data.battery_voltage && data.battery_voltage > 0) {
+            batteryElement.textContent = `${data.battery_voltage.toFixed(1)} V`;
+            
+            // Add battery level indicator
+            if (data.battery_voltage < 11.0) {
+                batteryElement.classList.add('low-battery');
+            } else {
+                batteryElement.classList.remove('low-battery');
+            }
+        } else {
+            batteryElement.textContent = '-- V';
+        }
 
         // Update timestamp
         const lastUpdate = document.getElementById('lastUpdate');
@@ -403,23 +436,62 @@ class WellTankMonitor {
                 }
             }
             
+            // Determine alert type and severity
+            const alertType = alert.type || 'change';
+            const severity = alert.severity || 'normal';
             const isIncrease = alert.current_level > alert.previous_level;
-            const icon = isIncrease ? '📈' : '📉';
-            const iconClass = isIncrease ? 'increase' : 'decrease';
+            
+            // Enhanced icon and title mapping
+            const iconMap = {
+                'emergency_level': '🚨',
+                'critical_level': '⚠️',
+                'low_level': '📉',
+                'rapid_drop': '⬇️',
+                'predictive': '🔮',
+                'low_battery': '🔋'
+            };
+            
+            const titleMap = {
+                'emergency_level': 'EMERGENCY - Tank Nearly Empty',
+                'critical_level': 'CRITICAL - Very Low Water Level',
+                'low_level': 'Low Water Level Warning',
+                'rapid_drop': 'Rapid Water Level Drop',
+                'predictive': 'Predictive Low Water Alert',
+                'low_battery': 'Low Battery Alert'
+            };
+            
+            const icon = iconMap[alertType] || (isIncrease ? '📈' : '📉');
+            const iconClass = severity;
             const changeClass = isIncrease ? 'increase' : 'decrease';
+            const title = titleMap[alertType] || `Water level ${isIncrease ? 'increased' : 'decreased'}`;
+            
+            // Build alert details based on type
+            let alertDetails = '';
+            if (alertType === 'predictive') {
+                const hoursRemaining = alert.hours_remaining || 0;
+                alertDetails = `Estimated ${hoursRemaining.toFixed(1)} hours remaining`;
+            } else if (alertType === 'low_battery') {
+                const batteryVoltage = alert.battery_voltage || 0;
+                alertDetails = `Battery voltage: ${batteryVoltage.toFixed(1)}V`;
+            } else {
+                alertDetails = `From ${alert.previous_level ? alert.previous_level.toFixed(1) : '0'}% to ${alert.current_level ? alert.current_level.toFixed(1) : '0'}%`;
+            }
+            
+            const changeText = alertType === 'predictive' || alertType === 'low_battery' 
+                ? `${alert.current_gallons ? alert.current_gallons.toFixed(0) : '0'} gal`
+                : `${alert.percent_change ? alert.percent_change.toFixed(1) : '0'}%`;
             
             return `
-                <div class="alert-item">
+                <div class="alert-item ${severity}">
                     <div class="alert-icon ${iconClass}">${icon}</div>
                     <div class="alert-content">
-                        <div class="alert-title">Water level ${isIncrease ? 'increased' : 'decreased'} by ${alert.percent_change ? alert.percent_change.toFixed(1) : '0'}%</div>
+                        <div class="alert-title">${title}</div>
                         <div class="alert-time">${timestamp}</div>
-                        <div class="alert-details">
-                            From ${alert.previous_level ? alert.previous_level.toFixed(1) : '0'}% to ${alert.current_level ? alert.current_level.toFixed(1) : '0'}%
-                        </div>
+                        <div class="alert-details">${alertDetails}</div>
+                        ${alert.usage_rate ? `<div class="alert-usage">Usage rate: ${alert.usage_rate.toFixed(2)} gal/hr</div>` : ''}
                     </div>
                     <div class="alert-change ${changeClass}">
-                        ${alert.percent_change ? alert.percent_change.toFixed(1) : '0'}%
+                        ${changeText}
                     </div>
                 </div>
             `;
@@ -443,6 +515,59 @@ class WellTankMonitor {
         document.getElementById('alertThreshold').textContent = `${config.alert_threshold || 0}%`;
         document.getElementById('alertCooldown').textContent = `${config.alert_cooldown || 0} min`;
         document.getElementById('firebaseStatus').textContent = config.firebase_connected ? 'Connected' : 'Disconnected';
+        
+        // Update enhanced alert configuration
+        if (config.enhanced_alerts) {
+            const enhancedConfig = config.enhanced_alerts;
+            const configDetails = document.getElementById('enhancedConfigDetails') || this.createEnhancedConfigSection();
+            
+            configDetails.innerHTML = `
+                <h4>Enhanced Alert Thresholds</h4>
+                <div class="config-item">Low Level: ${enhancedConfig.low_level_threshold}%</div>
+                <div class="config-item">Critical Level: ${enhancedConfig.critical_level_threshold}%</div>
+                <div class="config-item">Emergency Level: ${enhancedConfig.emergency_level_threshold}%</div>
+                <div class="config-item">Rapid Drop: ${enhancedConfig.rapid_drop_threshold}%</div>
+                <div class="config-item">Email Alerts: ${enhancedConfig.email_alerts_enabled ? 'Enabled' : 'Disabled'}</div>
+            `;
+        }
+        
+        // Update usage statistics
+        if (config.usage_stats) {
+            const usageStats = config.usage_stats;
+            const usageDetails = document.getElementById('usageStatsDetails') || this.createUsageStatsSection();
+            
+            const usageRateText = usageStats.current_usage_rate_gph > 0 
+                ? `${usageStats.current_usage_rate_gph.toFixed(2)} gal/hr`
+                : 'Calculating...';
+                
+            const daysRemainingText = usageStats.days_remaining !== null && usageStats.days_remaining > 0
+                ? `${usageStats.days_remaining.toFixed(1)} days`
+                : 'N/A';
+            
+            usageDetails.innerHTML = `
+                <h4>Usage Statistics</h4>
+                <div class="config-item">Current Usage Rate: ${usageRateText}</div>
+                <div class="config-item">Estimated Days Remaining: ${daysRemainingText}</div>
+            `;
+        }
+    }
+    
+    createEnhancedConfigSection() {
+        const settingsContent = document.querySelector('#settingsModal .modal-content');
+        const enhancedSection = document.createElement('div');
+        enhancedSection.id = 'enhancedConfigDetails';
+        enhancedSection.className = 'enhanced-config-section';
+        settingsContent.appendChild(enhancedSection);
+        return enhancedSection;
+    }
+    
+    createUsageStatsSection() {
+        const settingsContent = document.querySelector('#settingsModal .modal-content');
+        const usageSection = document.createElement('div');
+        usageSection.id = 'usageStatsDetails';
+        usageSection.className = 'usage-stats-section';
+        settingsContent.appendChild(usageSection);
+        return usageSection;
     }
 
     showSettings() {
@@ -538,6 +663,56 @@ class WellTankMonitor {
             case 'error': return 'Error';
             case 'warning': return 'Warning';
             default: return 'Info';
+        }
+    }
+
+    async testPushNotification() {
+        try {
+            this.showLoading(true);
+            const response = await fetch(`${this.apiBase}/test-push-notification`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showToast('Test push notification sent successfully!', 'success');
+            } else {
+                throw new Error(result.error || 'Failed to send test push notification');
+            }
+        } catch (error) {
+            console.error('Error sending test push notification:', error);
+            this.showToast(`Failed to send test push notification: ${error.message}`, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async testEmailAlert() {
+        try {
+            this.showLoading(true);
+            const response = await fetch(`${this.apiBase}/test-email`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showToast('Test email sent successfully! Check your inbox.', 'success');
+            } else {
+                throw new Error(result.error || 'Failed to send test email');
+            }
+        } catch (error) {
+            console.error('Error sending test email:', error);
+            this.showToast(`Failed to send test email: ${error.message}`, 'error');
+        } finally {
+            this.showLoading(false);
         }
     }
 }
