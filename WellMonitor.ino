@@ -181,6 +181,7 @@ void setupWebServer() {
   server.on("/status", HTTP_GET, []() {
     DynamicJsonDocument doc(1024);
     
+    doc["device_id"] = "nano_esp32_tank_01";
     doc["distance_cm"] = currentDistance;
     doc["water_level_cm"] = waterLevel;
     doc["gallons"] = gallons;
@@ -206,6 +207,29 @@ void setupWebServer() {
     server.send(302, "text/plain", "");
   });
   
+  // Configuration endpoint
+  server.on("/config", HTTP_GET, []() {
+    DynamicJsonDocument doc(1024);
+    
+    doc["device_id"] = "nano_esp32_tank_01";
+    doc["tank_capacity_gallons"] = TANK_CAPACITY_GALLONS;
+    doc["tank_height_cm"] = TANK_HEIGHT_CM;
+    doc["sensor_height_cm"] = SENSOR_HEIGHT_CM;
+    doc["reading_interval_ms"] = READING_INTERVAL;
+    doc["app_send_interval_ms"] = APP_SEND_INTERVAL;
+    doc["app_server"] = "http://192.168.86.24:8090";
+    doc["api_endpoint"] = "/tank-data";
+    doc["wifi_ssid"] = ssid;
+    doc["wifi_rssi"] = WiFi.RSSI();
+    doc["ip_address"] = WiFi.localIP().toString();
+    
+    String response;
+    serializeJson(doc, response);
+    
+    server.sendHeader("Access-Control-Allow-Origin", "*");
+    server.send(200, "application/json", response);
+  });
+  
   // Basic web interface for testing
   server.on("/", HTTP_GET, []() {
     String html = "<html><body>";
@@ -218,6 +242,7 @@ void setupWebServer() {
     html += "<p>WiFi Signal: " + String(WiFi.RSSI()) + " dBm</p>";
     html += "<p><a href='/reading'>Take New Reading</a></p>";
     html += "<p><a href='/status'>JSON Data</a></p>";
+    html += "<p><a href='/config'>Configuration</a></p>";
     html += "</body></html>";
     
     server.send(200, "text/html", html);
@@ -231,8 +256,8 @@ void sendDataToApp() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     
-    // Construct full URL - replace with your app endpoint
-    String url = "http://192.168.86.21:8090/api/tank-data";
+    // Construct full URL - backend server
+    String url = "http://192.168.86.21:8090/tank-data";
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
     
@@ -246,6 +271,7 @@ void sendDataToApp() {
     doc["battery_voltage"] = batteryVoltage;
     doc["timestamp"] = millis();
     doc["wifi_rssi"] = WiFi.RSSI();
+    doc["tank_capacity"] = TANK_CAPACITY_GALLONS;
     
     String jsonString;
     serializeJson(doc, jsonString);
@@ -257,9 +283,13 @@ void sendDataToApp() {
       String response = http.getString();
       Serial.print("App update sent successfully. Response: ");
       Serial.println(httpResponseCode);
+      Serial.print("Response body: ");
+      Serial.println(response);
     } else {
       Serial.print("Error sending to app: ");
       Serial.println(httpResponseCode);
+      Serial.print("Error: ");
+      Serial.println(http.errorToString(httpResponseCode));
     }
     
     http.end();

@@ -404,6 +404,65 @@ body {
     margin-right: 0.5rem;
 }
 
+.alert-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+}
+
+.alert-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.status-label {
+    font-weight: 500;
+    color: #374151;
+}
+
+.status-value {
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.status-value.enabled {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.status-value.disabled {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.status-value.loading {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+#toggleAlertsBtn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 120px;
+}
+
+#toggleAlertsBtn i {
+    transition: transform 0.2s ease;
+}
+
+#toggleAlertsBtn.disabled i {
+    transform: rotate(180deg);
+}
+
 /* Alerts */
 .alerts-list {
     max-height: 300px;
@@ -848,6 +907,20 @@ body {
     }
 
     .test-buttons .btn {
+        min-width: auto;
+    }
+
+    .alert-controls {
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+
+    .alert-status {
+        justify-content: center;
+    }
+
+    #toggleAlertsBtn {
         min-width: auto;
     }
 }

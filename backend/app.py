@@ -53,6 +53,7 @@ last_critical_alert_time = None
 last_emergency_alert_time = None
 alert_history = []
 usage_history = []
+alerts_enabled = True  # Global flag to enable/disable all alerts
 
 # Initialize Firebase
 try:
@@ -186,9 +187,9 @@ def calculate_days_remaining(current_gallons):
 
 def check_for_alerts(current_data, previous_data):
     """Enhanced alert checking with multiple severity levels and drop detection"""
-    global last_alert_time, last_critical_alert_time, last_emergency_alert_time, usage_history
+    global last_alert_time, last_critical_alert_time, last_emergency_alert_time, usage_history, alerts_enabled
     
-    if not previous_data or not firebase_initialized:
+    if not previous_data or not firebase_initialized or not alerts_enabled:
         return
     
     current_percent = current_data.get('fill_percentage', 0)
@@ -266,8 +267,11 @@ def check_for_alerts(current_data, previous_data):
 
 def check_predictive_alerts(current_gallons):
     """Check if predictive alerts should be sent"""
-    global last_critical_alert_time
+    global last_critical_alert_time, alerts_enabled
     
+    if not alerts_enabled:
+        return
+        
     days_remaining = calculate_days_remaining(current_gallons)
     
     if days_remaining is not None and days_remaining <= 1:
@@ -818,6 +822,60 @@ Well Tank Monitor System
     except Exception as e:
         print(f"Error sending test email: {e}")
         return jsonify({'error': f'Failed to send test email: {str(e)}'}), 500
+
+@app.route('/alerts/status', methods=['GET'])
+def get_alerts_status():
+    """Get current alert system status"""
+    print(f"Alert status endpoint called. Alerts enabled: {alerts_enabled}")
+    return jsonify({
+        'alerts_enabled': alerts_enabled,
+        'firebase_connected': firebase_initialized,
+        'email_alerts_enabled': ENABLE_EMAIL_ALERTS,
+        'last_alert_time': last_alert_time.isoformat() if last_alert_time else None,
+        'alert_threshold': ALERT_THRESHOLD,
+        'enhanced_thresholds': {
+            'low_level': LOW_LEVEL_THRESHOLD,
+            'critical_level': CRITICAL_LEVEL_THRESHOLD,
+            'emergency_level': EMERGENCY_LEVEL_THRESHOLD,
+            'rapid_drop': RAPID_DROP_THRESHOLD
+        }
+    })
+
+@app.route('/alerts/toggle', methods=['POST'])
+def toggle_alerts():
+    """Toggle alert system on/off"""
+    global alerts_enabled
+    
+    try:
+        print(f"Toggle alerts endpoint called. Current state: {alerts_enabled}")
+        data = request.get_json()
+        print(f"Request data: {data}")
+        
+        if data and 'enabled' in data:
+            alerts_enabled = bool(data['enabled'])
+            status = 'enabled' if alerts_enabled else 'disabled'
+            print(f"Alert system set to {status}")
+            
+            return jsonify({
+                'success': True,
+                'alerts_enabled': alerts_enabled,
+                'message': f'Alert system {status}'
+            })
+        else:
+            # Toggle current state if no data provided
+            alerts_enabled = not alerts_enabled
+            status = 'enabled' if alerts_enabled else 'disabled'
+            print(f"Alert system toggled to {status}")
+            
+            return jsonify({
+                'success': True,
+                'alerts_enabled': alerts_enabled,
+                'message': f'Alert system {status}'
+            })
+            
+    except Exception as e:
+        print(f"Error toggling alerts: {e}")
+        return jsonify({'error': f'Failed to toggle alerts: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False) 

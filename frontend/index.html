@@ -155,7 +155,17 @@
                 </div>
                 <div class="modal-body">
                     <div class="test-alerts-section">
-                        <h3>Test Notifications</h3>
+                        <h3>Alert System Control</h3>
+                        <div class="alert-controls">
+                            <div class="alert-status">
+                                <span class="status-label">Alert System:</span>
+                                <span id="alertSystemStatus" class="status-value">Loading...</span>
+                            </div>
+                            <button id="toggleAlertsBtn" class="btn btn-primary">
+                                <i class="fas fa-toggle-on"></i>
+                                <span id="toggleAlertsText">Loading...</span>
+                            </button>
+                        </div>
                         <div class="test-buttons">
                             <button id="testPushBtn" class="btn btn-secondary">
                                 <i class="fas fa-bell"></i>

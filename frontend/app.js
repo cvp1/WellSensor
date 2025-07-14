@@ -33,6 +33,9 @@ class WellTankMonitor {
         // Test notification buttons
         document.getElementById('testPushBtn').addEventListener('click', () => this.testPushNotification());
         document.getElementById('testEmailBtn').addEventListener('click', () => this.testEmailAlert());
+        
+        // Alert system control
+        document.getElementById('toggleAlertsBtn').addEventListener('click', () => this.toggleAlertSystem());
 
         // Modal close buttons
         document.querySelectorAll('.modal-close').forEach(btn => {
@@ -91,6 +94,7 @@ class WellTankMonitor {
             await this.refreshData();
             await this.loadRecentAlerts();
             await this.loadConfig();
+            await this.loadAlertSystemStatus();
         } catch (error) {
             console.error('Error loading initial data:', error);
             this.showToast('Failed to load data', 'error');
@@ -711,6 +715,73 @@ class WellTankMonitor {
         } catch (error) {
             console.error('Error sending test email:', error);
             this.showToast(`Failed to send test email: ${error.message}`, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async loadAlertSystemStatus() {
+        try {
+            const response = await fetch(`${this.apiBase}/alerts/status`);
+            if (!response.ok) throw new Error('Failed to fetch alert status');
+            
+            const status = await response.json();
+            this.updateAlertSystemUI(status);
+        } catch (error) {
+            console.error('Error loading alert system status:', error);
+            this.updateAlertSystemUI({ alerts_enabled: false, error: true });
+        }
+    }
+
+    updateAlertSystemUI(status) {
+        const statusElement = document.getElementById('alertSystemStatus');
+        const toggleBtn = document.getElementById('toggleAlertsBtn');
+        const toggleText = document.getElementById('toggleAlertsText');
+        const toggleIcon = toggleBtn.querySelector('i');
+
+        if (status.error) {
+            statusElement.textContent = 'Error';
+            statusElement.className = 'status-value disabled';
+            toggleText.textContent = 'Error';
+            toggleBtn.disabled = true;
+            return;
+        }
+
+        const isEnabled = status.alerts_enabled;
+        
+        // Update status display
+        statusElement.textContent = isEnabled ? 'Enabled' : 'Disabled';
+        statusElement.className = `status-value ${isEnabled ? 'enabled' : 'disabled'}`;
+        
+        // Update toggle button
+        toggleText.textContent = isEnabled ? 'Disable' : 'Enable';
+        toggleIcon.className = isEnabled ? 'fas fa-toggle-on' : 'fas fa-toggle-off';
+        toggleBtn.className = `btn ${isEnabled ? 'btn-primary' : 'btn-secondary'}`;
+        toggleBtn.disabled = false;
+    }
+
+    async toggleAlertSystem() {
+        try {
+            this.showLoading(true);
+            const response = await fetch(`${this.apiBase}/alerts/toggle`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: '{}' // Always send a valid JSON body
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.updateAlertSystemUI({ alerts_enabled: result.alerts_enabled });
+                this.showToast(`Alert system ${result.alerts_enabled ? 'enabled' : 'disabled'}`, 'success');
+            } else {
+                throw new Error(result.error || 'Failed to toggle alert system');
+            }
+        } catch (error) {
+            console.error('Error toggling alert system:', error);
+            this.showToast(`Failed to toggle alert system: ${error.message}`, 'error');
         } finally {
             this.showLoading(false);
         }
